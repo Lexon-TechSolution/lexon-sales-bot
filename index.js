@@ -7,43 +7,77 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Angalia kama Key zipo (kwa ajili ya Logs)
+if (!process.env.GEMINI_API_KEY || !process.env.SHEET_URL) {
+    console.log("⚠️ ONYO: Hakikisha GEMINI_API_KEY na SHEET_URL zimewekwa kwenye Render Environment Variables!");
+}
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-const SHEET_URL = "WEKA_LINK_YAKO_HAPA"; 
 
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        // HAPA NDIPO MABADILIKO YALIPO:
-        browser: 'firefox', 
-        headless: true, // Iweke true ili isifungue window kubwa
-        args: ['--no-sandbox']
+        headless: true,
+        // Hii inatafuta Chrome popote ilipo (Render au Mac)
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
+        ]
     }
 });
 
+// Onyesha QR Code
 client.on('qr', (qr) => {
-    console.log('✅ QR CODE TAYARI! SCAN SASA:');
+    console.log('---------------------------------------------------------');
+    console.log('✅ SCAN QR CODE HAPA CHINI NA WHATSAPP YAKO:');
     qrcode.generate(qr, { small: true });
+    console.log('---------------------------------------------------------');
 });
 
+// Ikishaunganishwa
 client.on('ready', () => {
-    console.log('🚀 LEXON AI: Imewaka kwenye Firefox! Bot iko tayari.');
+    console.log('🚀 LEXON AI SALES BOT IKO TAYARI!');
+    console.log('Inasubiri ujumbe sasa...');
 });
 
+// Kushughulikia ujumbe
 client.on('message', async (msg) => {
+    // Puuza meseji za group
     if (msg.from.includes('@g.us')) return;
+
+    console.log(`📩 Ujumbe mpya kutoka kwa ${msg.from}: ${msg.body}`);
+
     try {
-        const res = await axios.get(SHEET_URL);
-        const data = res.data;
-        const prompt = `Wewe ni Lexon AI Sales Assistant. Tumia data hizi: ${data}. Mteja amesema: ${msg.body}. Jibu kwa Kiswahili.`;
-        
+        // 1. Chukuwa data kutoka Google Sheet
+        const res = await axios.get(process.env.SHEET_URL);
+        const businessData = JSON.stringify(res.data);
+
+        // 2. Tengeneza prompt kwa ajili ya Gemini
+        const prompt = `
+            Wewe ni Lexon AI, msaidizi mwerevu wa mauzo. 
+            Tumia maelezo haya ya biashara kujibu maswali: ${businessData}
+            Mteja anasema: "${msg.body}"
+            Jibu kwa lugha ya Kiswahili fasaha, rafiki na ya kibiashara. 
+            Kama hujui jibu, muombe mteja asubiri kidogo mtaalam wa binadamu awasiliane naye.
+        `;
+
+        // 3. Pata jibu kutoka kwa Gemini
         const result = await model.generateContent(prompt);
-        await client.sendMessage(msg.from, result.response.text());
-        console.log('✅ Jibu limetumwa kwa: ' + msg.from);
-    } catch (e) {
-        console.log("Error:", e.message);
+        const aiResponse = result.response.text();
+
+        // 4. Tuma jibu kwa mteja
+        await client.sendMessage(msg.from, aiResponse);
+        console.log('✅ Jibu limetumwa kwa mteja!');
+
+    } catch (error) {
+        console.error("❌ ERROR ILIYOTOKEA:", error.message);
     }
 });
 
+// Washa Bot
+console.log('🎬 Inawasha Bot... Subiri kidogo...');
 client.initialize();
