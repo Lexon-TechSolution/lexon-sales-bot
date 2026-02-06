@@ -1,0 +1,8 @@
+{
+  "name": "Lexon AI Sales Hub",
+  "description": "A professional dashboard to manage and simulate a WhatsApp AI Sales Bot integrated with Google Sheets and Gemini AI for Swahili-based customer support.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
