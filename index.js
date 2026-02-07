@@ -4,10 +4,23 @@ import qrcode from 'qrcode-terminal';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import axios from 'axios';
 import dotenv from 'dotenv';
+import express from 'express'; // Tumeongeza hii
 
 dotenv.config();
 
-// Angalia kama Key zipo (kwa ajili ya Logs)
+// 1. ANZA WEB SERVER KWA AJILI YA RENDER
+const app = express();
+const PORT = process.env.PORT || 10000;
+
+app.get('/', (req, res) => {
+    res.send('Lexon AI Sales Bot is Alive and Running!');
+});
+
+app.listen(PORT, () => {
+    console.log(`✅ Web Server inasikiliza kwenye port ${PORT}`);
+});
+
+// 2. KUKAGUA CONFIGURATION
 if (!process.env.GEMINI_API_KEY || !process.env.SHEET_URL) {
     console.log("⚠️ ONYO: Hakikisha GEMINI_API_KEY na SHEET_URL zimewekwa kwenye Render Environment Variables!");
 }
@@ -15,11 +28,11 @@ if (!process.env.GEMINI_API_KEY || !process.env.SHEET_URL) {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
+// 3. KUANDAA WHATSAPP CLIENT
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        // Hii inatafuta Chrome popote ilipo (Render au Mac)
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
         args: [
             '--no-sandbox',
@@ -30,7 +43,7 @@ const client = new Client({
     }
 });
 
-// Onyesha QR Code
+// Onyesha QR Code kwenye Logs za Render
 client.on('qr', (qr) => {
     console.log('---------------------------------------------------------');
     console.log('✅ SCAN QR CODE HAPA CHINI NA WHATSAPP YAKO:');
@@ -38,25 +51,21 @@ client.on('qr', (qr) => {
     console.log('---------------------------------------------------------');
 });
 
-// Ikishaunganishwa
 client.on('ready', () => {
     console.log('🚀 LEXON AI SALES BOT IKO TAYARI!');
-    console.log('Inasubiri ujumbe sasa...');
 });
 
-// Kushughulikia ujumbe
+// 4. KUSHUGHULIKIA UJUMBE
 client.on('message', async (msg) => {
-    // Puuza meseji za group
     if (msg.from.includes('@g.us')) return;
 
-    console.log(`📩 Ujumbe mpya kutoka kwa ${msg.from}: ${msg.body}`);
+    console.log(`📩 Ujumbe: ${msg.body}`);
 
     try {
-        // 1. Chukuwa data kutoka Google Sheet
+        // Chukuwa data kutoka Google Sheet
         const res = await axios.get(process.env.SHEET_URL);
         const businessData = JSON.stringify(res.data);
 
-        // 2. Tengeneza prompt kwa ajili ya Gemini
         const prompt = `
             Wewe ni Lexon AI, msaidizi mwerevu wa mauzo. 
             Tumia maelezo haya ya biashara kujibu maswali: ${businessData}
@@ -65,19 +74,17 @@ client.on('message', async (msg) => {
             Kama hujui jibu, muombe mteja asubiri kidogo mtaalam wa binadamu awasiliane naye.
         `;
 
-        // 3. Pata jibu kutoka kwa Gemini
         const result = await model.generateContent(prompt);
         const aiResponse = result.response.text();
 
-        // 4. Tuma jibu kwa mteja
         await client.sendMessage(msg.from, aiResponse);
-        console.log('✅ Jibu limetumwa kwa mteja!');
+        console.log('✅ Jibu limetumwa!');
 
     } catch (error) {
-        console.error("❌ ERROR ILIYOTOKEA:", error.message);
+        console.error("❌ ERROR:", error.message);
     }
 });
 
-// Washa Bot
-console.log('🎬 Inawasha Bot... Subiri kidogo...');
+// WASHA BOT
+console.log('🎬 Inawasha Bot...');
 client.initialize();
